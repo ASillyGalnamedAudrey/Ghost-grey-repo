@@ -1,0 +1,66 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack project.zip (first run only)
+        run: |
+          if [ -f project.zip ]; then
+            unzip -oq project.zip
+            rm project.zip
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Unpack project files"
+            git push
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Download mGBA libretro core
+        run: |
+          set -e
+          for abi in arm64-v8a armeabi-v7a; do
+            mkdir -p app/src/main/jniLibs/$abi
+            curl -fsSL -o core_$abi.zip "https://buildbot.libretro.com/nightly/android/latest/$abi/mgba_libretro_android.so.zip"
+            unzip -o core_$abi.zip -d core_$abi
+            mv core_$abi/mgba_libretro_android.so app/src/main/jniLibs/$abi/libcore.so
+          done
+
+      - name: Build APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Name the APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk GhostGrey-Android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhostGrey-Android
+          path: GhostGrey-Android.apk
+
+      - name: Attach to release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            GhostGrey-Android.apk
+            app/src/main/assets/GhostGrey03.bps
+            patches/GhostGrey_Korean_v103.bps

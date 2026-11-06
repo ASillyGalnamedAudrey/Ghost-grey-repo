@@ -1,0 +1,8 @@
+*.gba
+*.srm
+*.sav
+*.zip
+.gradle/
+build/
+local.properties
+app/src/main/jniLibs/
